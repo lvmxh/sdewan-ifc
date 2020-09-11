@@ -20,11 +20,13 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	batchv1alpha1 "sdewan.akraino.org/sdewan/api/v1alpha1"
+	"sdewan.akraino.org/sdewan/openwrt"
 )
 
 // CniInterfaceReconciler reconciles a CniInterface object
@@ -38,10 +40,48 @@ type CniInterfaceReconciler struct {
 // +kubebuilder:rbac:groups=batch.sdewan.akraino.org,resources=cniinterfaces/status,verbs=get;update;patch
 
 func (r *CniInterfaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
-	_ = context.Background()
-	_ = r.Log.WithValues("cniinterface", req.NamespacedName)
+	ctx := context.Background()
+	log := r.Log.WithValues("cniinterface", req.NamespacedName)
 
 	// your logic here
+	var cniInterface batchv1alpha1.CniInterface
+	if err := r.Get(ctx, req.NamespacedName, &cniInterface); err != nil {
+		log.Error(err, "unable to fetch CniInterface")
+		// we'll ignore not-found errors, since they can't be fixed by an immediate
+		// requeue (we'll need to wait for a new notification), and we can get them
+		// on deleted requests.
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	podList := &corev1.PodList{}
+	label := cniInterface.Spec.CnfSelector.MatchLabels["sdewanPurpose"]
+	err := r.Client.List(ctx, podList, client.MatchingLabels{"sdewanPurpose": label})
+	if err != nil {
+		log.Error(err, "Failed to get pod list")
+		return ctrl.Result{}, err
+	}
+
+	fcs := &openwrt.AvailableInterfaces{}
+	for _, pod := range podList.Items {
+		openwrtClient := openwrt.NewOpenwrtClient(pod.Status.PodIP, "root", "")
+		ifc := openwrt.InterfaceClient{OpenwrtClient: openwrtClient}
+		fcs, _ = ifc.GetAvailableInterfaces() // TODO, support get one interface?
+	}
+
+	for _, fc := range fcs.Interfaces {
+		if cniInterface.Spec.Name == fc.Name {
+			cniInterface.Status.Status = fc.Status
+			cniInterface.Status.ReceivedPackets = fc.ReceivedPackets
+			cniInterface.Status.SendPackets = fc.SendPackets
+			cniInterface.Status.MacAddress = fc.MacAddress
+			cniInterface.Status.IpAddress = fc.IpAddress
+			break
+		}
+	}
+	if err := r.Update(ctx, &cniInterface); err != nil {
+		log.Error(err, "unable to update CniInterface status")
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }

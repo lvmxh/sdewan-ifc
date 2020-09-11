@@ -29,13 +29,22 @@ type CniInterfaceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of CniInterface. Edit CniInterface_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Name        string               `json:"name,omitempty"`
+	Status      string               `json:"status,omitempty"`
+	MacAddress  string               `json:"mac_address,omitempty"`
+	IpAddress   []string             `json:"ip_address,omitempty"`
+	CnfSelector metav1.LabelSelector `json:"cnfSelector,omitempty"`
 }
 
 // CniInterfaceStatus defines the observed state of CniInterface
 type CniInterfaceStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	ReceivedPackets string   `json:"received_packets,omitempty"`
+	SendPackets     string   `json:"send_packets,omitempty"`
+	Status          string   `json:"status,omitempty"`
+	MacAddress      string   `json:"mac_address,omitempty"`
+	IpAddress       []string `json:"ip_address,omitempty"`
 }
 
 // +kubebuilder:object:root=true

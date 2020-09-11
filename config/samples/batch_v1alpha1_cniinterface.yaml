@@ -4,4 +4,7 @@ metadata:
   name: cniinterface-sample
 spec:
   # Add fields here
-  foo: bar
+  cnfSelector:
+    matchLabels:
+      sdewanPurpose: cnf
+  name: eth0
