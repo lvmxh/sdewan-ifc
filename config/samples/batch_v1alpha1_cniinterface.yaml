@@ -1,0 +1,7 @@
+apiVersion: batch.sdewan.akraino.org/v1alpha1
+kind: CniInterface
+metadata:
+  name: cniinterface-sample
+spec:
+  # Add fields here
+  foo: bar
