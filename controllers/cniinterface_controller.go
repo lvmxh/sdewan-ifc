@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"reflect"
 	_ "runtime/debug"
-	_ "time"
+	"time"
 
 	"github.com/go-logr/logr"
 	// . "github.com/onsi/ginkgo"
@@ -322,19 +322,23 @@ func (r *CniInterfaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		// we'll ignore not-found errors, since they can't be fixed by an immediate
 		// requeue (we'll need to wait for a new notification), and we can get them
 		// on deleted requests.
+		// NOTE No need to retry?
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if cniInterface.Labels["ownedByPod"] == "" {
+		// NOTE, No need to retry.
 		return ctrl.Result{}, errors.New("The CRD interface outof this controller management.")
 	}
 	pod, err := r.GetPodByInterface(cniInterface)
 	if pod == nil {
 		// TODO IF not find pod, means the pod is deleted, we should delete ICN interface CR
 		// NOT test this case
+		// TODO still need to retry if Delete failed?
 		if err := r.Delete(ctx, &cniInterface); (err) != nil {
 			fmt.Println(err, "unable to delete icn interface: ", cniInterface.Name)
 		}
+		// NOTE: No need to retry.
 		return ctrl.Result{}, err
 	}
 
@@ -351,7 +355,8 @@ func (r *CniInterfaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	fcs, err = ifc.GetAvailableInterfaces() // TODO, support get one interface?
 	if err != nil {
 		log.Error(err, "Failed to get interface list from CNF openwert.")
-		return ctrl.Result{}, err
+		// TODO, maybe someting wrong with CNF openwrt. what should we do after try many times?
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 5}, err
 	}
 	fmt.Printf("fcs %T\n", fcs)
 	// Debug info for the last interface
@@ -366,11 +371,11 @@ func (r *CniInterfaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 	// NOTE: if we Update ICN interface CR, the next reconcile will trigger automatically.
 	if err := r.Update(ctx, &cniInterface); err != nil {
 		log.Error(err, "unable to update CniInterface status")
+		// TODO, how long need to retry?
 		return ctrl.Result{}, err
 	}
-	// time.Sleep(5 * time.Second)
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 2}, nil
 }
 
 // List the needed CR to specific events and return the reconcile Requests
