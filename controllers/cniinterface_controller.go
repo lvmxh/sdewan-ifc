@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	_ "runtime/debug"
@@ -276,13 +277,19 @@ func updateCniInterfaceStatus(crdiface *batchv1alpha1.CniInterface, iface openwr
 }
 
 func (r *CniInterfaceReconciler) GetPodByInterface(ifc batchv1alpha1.CniInterface) (*corev1.Pod, error) {
-	key := client.ObjectKey{Namespace: ifc.Namespace, Name: ifc.Labels["ownedByPod"]}
-	log := r.Log.WithValues("cniinterface", key)
-	ctx := context.Background()
 	pod := &corev1.Pod{}
+
+	if ifc.Labels["ownedByPod"] == "" {
+		fmt.Println("No label 'ownedByPod' for", ifc.Name, "It is not managed by this CRD controller: ")
+		return pod, errors.New("No 'ownedByPod' label")
+	}
+	key := client.ObjectKey{Namespace: ifc.Namespace, Name: ifc.Labels["ownedByPod"]}
+	// log := r.Log.WithValues("cniinterface", key)
+	ctx := context.Background()
 	err := r.Get(ctx, key, pod)
 	if err != nil {
-		log.Error(err, "unable to fetch pod", key)
+		fmt.Println(err, "unable to fetch pod: ", key)
+		return nil, err
 	}
 	return pod, err
 }
@@ -318,36 +325,37 @@ func (r *CniInterfaceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	podList := &corev1.PodList{}
-	label := cniInterface.Spec.CnfSelector.MatchLabels["sdewanPurpose"]
-	// TODO It is better to use Get of List
-	// TODO IF not find pod, means the pod is deleted, we should delete ICN interface CR
-	err := r.Client.List(ctx, podList, client.MatchingLabels{"sdewanPurpose": label})
-	if err != nil {
-		log.Error(err, "Failed to get pod list")
+	if cniInterface.Labels["ownedByPod"] == "" {
+		return ctrl.Result{}, errors.New("The CRD interface outof this controller management.")
+	}
+	pod, err := r.GetPodByInterface(cniInterface)
+	if pod == nil {
+		// TODO IF not find pod, means the pod is deleted, we should delete ICN interface CR
+		// NOT test this case
+		if err := r.Delete(ctx, &cniInterface); (err) != nil {
+			fmt.Println(err, "unable to delete icn interface: ", cniInterface.Name)
+		}
 		return ctrl.Result{}, err
 	}
 
 	fcs := &openwrt.AvailableInterfaces{}
-	for _, pod := range podList.Items {
-		log.Info(fmt.Sprintf("Annotations nfn-network: %v\n", pod.Annotations["k8s.plugin.opnfv.org/nfn-network"]))
-		log.Info(fmt.Sprintf("Annotations networks-status: %v\n", pod.Annotations["k8s.v1.cni.cncf.io/networks-status"]))
-		log.Info(fmt.Sprintf("Annotations ovnInterfaces: %v\n", pod.Annotations["k8s.plugin.opnfv.org/ovnInterfaces"]))
-		log.Info(fmt.Sprintf("Pod interfaces: %v\n", (*createCniInterfaces(pod)[0]).Spec))
-		// for ifc := range pod.Annotations["k8s.plugin.opnfv.org/nfn-network"]["interface"] {
-		// 	log.Info(fmt.Sprintf("Annotations interface: %v, ipAddress: %v\n", ifc["interface"], ifc["ipAddress"]))
-		// }
-		openwrtClient := openwrt.NewOpenwrtClient(pod.Status.PodIP, "root", "")
-		ifc := openwrt.InterfaceClient{OpenwrtClient: openwrtClient}
-		fcs, err = ifc.GetAvailableInterfaces() // TODO, support get one interface?
-		if err != nil {
-			log.Error(err, "Failed to get interface list from CNF openwert.")
-			return ctrl.Result{}, err
-		}
-		fmt.Printf("fcs %T\n", fcs)
-		// Debug info for the last interface
-		log.Info(fmt.Sprintf("Pod interfaces: %v\n", (*createCniInterfaces(pod, fcs)[2]).Spec))
+	log.Info(fmt.Sprintf("Annotations nfn-network: %v\n", pod.Annotations["k8s.plugin.opnfv.org/nfn-network"]))
+	log.Info(fmt.Sprintf("Annotations networks-status: %v\n", pod.Annotations["k8s.v1.cni.cncf.io/networks-status"]))
+	log.Info(fmt.Sprintf("Annotations ovnInterfaces: %v\n", pod.Annotations["k8s.plugin.opnfv.org/ovnInterfaces"]))
+	log.Info(fmt.Sprintf("Pod interfaces: %v\n", (*createCniInterfaces(*pod)[0]).Spec))
+	// for ifc := range pod.Annotations["k8s.plugin.opnfv.org/nfn-network"]["interface"] {
+	// 	log.Info(fmt.Sprintf("Annotations interface: %v, ipAddress: %v\n", ifc["interface"], ifc["ipAddress"]))
+	// }
+	openwrtClient := openwrt.NewOpenwrtClient(pod.Status.PodIP, "root", "")
+	ifc := openwrt.InterfaceClient{OpenwrtClient: openwrtClient}
+	fcs, err = ifc.GetAvailableInterfaces() // TODO, support get one interface?
+	if err != nil {
+		log.Error(err, "Failed to get interface list from CNF openwert.")
+		return ctrl.Result{}, err
 	}
+	fmt.Printf("fcs %T\n", fcs)
+	// Debug info for the last interface
+	log.Info(fmt.Sprintf("Pod interfaces: %v\n", (*createCniInterfaces(*pod, fcs)[2]).Spec))
 
 	for _, fc := range fcs.Interfaces {
 		if cniInterface.Spec.Name == fc.Name {
