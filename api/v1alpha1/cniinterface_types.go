@@ -29,6 +29,7 @@ type CniInterfaceSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of CniInterface. Edit CniInterface_types.go to remove/update
+	OwnerPod    string               `json:"ownerpod,omitempty"`
 	Name        string               `json:"name,omitempty"`
 	Status      string               `json:"status,omitempty"`
 	MacAddress  string               `json:"mac_address,omitempty"`

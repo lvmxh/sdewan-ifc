@@ -1,0 +1,10 @@
+package cnfprovider
+
+import (
+	_ sdewanv1alpha1 "sdewan.akraino.org/sdewan/api/v1alpha1"
+)
+
+type CnfProvider interface {
+	// TODO: Add more Interfaces here
+	IsCnfReady() (bool, error)
+}

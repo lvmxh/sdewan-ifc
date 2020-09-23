@@ -7,4 +7,5 @@ spec:
   cnfSelector:
     matchLabels:
       sdewanPurpose: cnf
+      ownedByPod: sdewan-edge-a
   name: eth0

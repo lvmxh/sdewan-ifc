@@ -1,0 +1,52 @@
+
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: mutating-webhook-configuration
+webhooks:
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-batch-sdewan-akraino-org-v1alpha1-cniinterface
+  failurePolicy: Fail
+  name: mcniinterface.kb.io
+  rules:
+  - apiGroups:
+    - batch.sdewan.akraino.org
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - cniinterfaces
+
+---
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: ValidatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: validating-webhook-configuration
+webhooks:
+- clientConfig:
+    caBundle: Cg==
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-batch-sdewan-akraino-org-v1alpha1-cniinterface
+  failurePolicy: Fail
+  name: vcniinterface.kb.io
+  rules:
+  - apiGroups:
+    - batch.sdewan.akraino.org
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - cniinterfaces
