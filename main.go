@@ -74,10 +74,21 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "CniInterface")
 		os.Exit(1)
 	}
-	if err = (&batchv1alpha1.CniInterface{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "CniInterface")
+
+	if err = batchv1alpha1.SetupUserACLWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "UserACL")
 		os.Exit(1)
 	}
+
+	if err = batchv1alpha1.SetupMUserACLWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "MUserACL")
+		os.Exit(1)
+	}
+
+	// if err = (&batchv1alpha1.CniInterface{}).SetupWebhookWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create webhook", "webhook", "CniInterface")
+	// 	os.Exit(1)
+	// }
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
