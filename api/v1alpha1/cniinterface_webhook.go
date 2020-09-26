@@ -30,7 +30,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-const ACLGROUP = "icn:nfc:sdewan"
+const (
+	// TODO hard code here.
+	ACLGROUP    = "icn:cnf:sdewan"
+	SYSAUTH     = "system:authenticated"
+	CNFOPERATOR = "cnfop"
+)
 
 // log is for logging in this package.
 var cniinterfacelog = logf.Log.WithName("cniinterface-resource")
@@ -68,29 +73,28 @@ func (v *userACLValidator) Handle(ctx context.Context, req admission.Request) ad
 			http.StatusBadRequest,
 			errors.New("The group is not batch.sdewan.akraino.org"))
 	}
-	aclgroup := false
-	for _, g := range req.UserInfo.Groups {
-		// TODO hardcode
-		if g == ACLGROUP {
-			aclgroup = true
-			break
-		}
+	gset := make(map[string]bool)
+	for _, s := range req.UserInfo.Groups {
+		gset[s] = true
 	}
 
 	cniinterfacelog.Info(fmt.Sprintf("Request User Info: %v", req.UserInfo))
-	cniinterfacelog.Info(fmt.Sprintf("aclgroup: %v", aclgroup))
+	cniinterfacelog.Info(fmt.Sprintf("aclgroup: %v", gset[ACLGROUP]))
 
 	obj := &CniInterface{}
+	if req.UserInfo.Username != CNFOPERATOR {
+		return admission.Denied(fmt.Sprintf("User: %s is not in acl group, please use icn cnf user: %s.", req.UserInfo.Username, CNFOPERATOR))
+	}
 
 	if req.Operation == "CREATE" || req.Operation == "UPDATE" || req.Operation == "DELETE" {
-		if !aclgroup {
+		if !(gset[ACLGROUP] && gset[SYSAUTH]) {
 			return admission.Denied(fmt.Sprintf("User is not in acl group %s. Operation type: %s is not allowed", ACLGROUP, req.Operation))
 		}
 		err := v.decoder.Decode(req, obj)
 		if err != nil {
 			return admission.Errored(http.StatusBadRequest, errors.New("Uknow resource type."))
 		}
-		return admission.Denied(fmt.Sprintf("We don't support operation type: %s", req.Operation))
+		return admission.Allowed(fmt.Sprintf("%s %s", req.Operation, req.Name))
 	}
 	return admission.Allowed("")
 }
